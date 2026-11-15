@@ -217,6 +217,8 @@ struct Manifold::Impl {
 
   void CleanupTopology();
   void RemoveDegenerates(int firstNewVert = 0);
+  void CollapseShortEdges(double tolerance);
+  void OptimizeTriangleQuality(double tolerance);
   void Decimate(double tolerance);
   TriResult IsDegenerate(int tri) const;
   bool IsFolded(int edge) const;

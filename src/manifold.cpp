@@ -397,8 +397,39 @@ Manifold Manifold::Simplify(double tolerance) const {
   auto impl = std::make_shared<Impl>(*leafImpl);
   impl->RemoveDegenerates();
   impl->Decimate(tolerance);
+  impl->OptimizeTriangleQuality(std::max(tolerance, impl->epsilon_));
   impl->SortGeometry();
   return Manifold(impl);
+}
+
+/**
+ * Returns a copy of the manifold with short edges and degenerate triangles
+ * removed, then locally retriangulated to improve triangle shape. Edges shorter
+ * than tolerance are collapsed when the resulting surface movement is also
+ * bounded by tolerance. Coplanar edges are flipped when doing so raises the
+ * worst shape quality of the two adjacent triangles; these flips preserve the
+ * surface exactly. Non-coplanar edges are left untouched, so the original
+ * volume is preserved.
+ */
+Manifold Manifold::ImproveQuality(double tolerance) const {
+  auto leafImpl = GetCsgLeafNode().GetImpl();
+  if (leafImpl->status_ != Error::NoError)
+    return PropagateStatus(leafImpl->status_);
+  auto impl = std::make_shared<Impl>(*leafImpl);
+  impl->RemoveDegenerates();
+  impl->CollapseShortEdges(tolerance);
+  impl->OptimizeTriangleQuality(tolerance);
+  impl->RemoveDegenerates();
+  impl->SortGeometry();
+  return Manifold(impl);
+}
+
+/**
+ * Alias for ImproveQuality(). Removes short edges and degenerate triangles, and
+ * improves the shape of the remaining triangles without changing topology.
+ */
+Manifold Manifold::Cleanup(double tolerance) const {
+  return ImproveQuality(tolerance);
 }
 
 /**
@@ -411,8 +442,17 @@ Manifold Manifold::RemoveDegenerates() const {
     return PropagateStatus(leafImpl->status_);
   auto impl = std::make_shared<Impl>(*leafImpl);
   impl->RemoveDegenerates();
+  impl->OptimizeTriangleQuality(impl->epsilon_);
   impl->SortGeometry();
   return Manifold(impl);
+}
+
+/**
+ * Returns a copy with degenerates removed and edges shorter than tolerance
+ * collapsed. This is equivalent to ImproveQuality(tolerance).
+ */
+Manifold Manifold::RemoveDegenerates(double tolerance) const {
+  return ImproveQuality(tolerance);
 }
 
 /**

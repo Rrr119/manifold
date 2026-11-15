@@ -69,6 +69,8 @@ This library is fast with guaranteed manifold output. As such you need manifold 
 
 The most significant contribution here is a guaranteed-manifold [mesh Boolean](https://github.com/elalish/manifold/wiki/Manifold-Library#mesh-boolean) algorithm, which I believe is the first of its kind. If you know of another, please open a discussion - a mesh Boolean algorithm robust to edge cases has been an open problem for many years. Likewise, if the Boolean here ever fails you, please submit an issue! This Boolean forms the basis of a CAD kernel, as it allows simple shapes to be combined into more complex ones.
 
+Boolean output is guaranteed to be manifold, but clipping near-coincident faces can still leave needle and sliver triangles. Use `Manifold::ImproveQuality(tolerance)` (also exposed as `Cleanup`) to collapse short edges and degenerate faces, then flip coplanar diagonals to improve triangle shape without changing the volume. See [Mesh quality cleanup](docs/MeshQuality.md) for the algorithm, guarantees, and benchmark.
+
 Manifold has full support for arbitrary vertex properties, and also has IDs that make it easy to keep track of materials and what surfaces belong to what input objects or faces. See our [web example](https://manifoldcad.org/model-viewer.html) for a simple demonstration of combining objects with unique textures.
 
 Also included are a novel and powerful suite of refining functions for smooth mesh interpolation. They handle smoothing both triangles and quads, as well as keeping polygonal faces flat. You can easily create sharp or small-radius edges where desired, or even drive the curvature by normal vectors.

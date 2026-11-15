@@ -1,0 +1,17 @@
+{
+  "root": "/home/dev/feedback/uid21954",
+  "B": "/home/dev/feedback/uid21954",
+  "sha": "140047565350f141089d9f687a1e3ab0bdc3e25f",
+  "wslDistro": "Ubuntu-26.04",
+  "source": {
+    "owner": "elalish",
+    "repo": "manifold",
+    "sha": "140047565350f141089d9f687a1e3ab0bdc3e25f"
+  },
+  "fork": {
+    "owner": "Rrr119",
+    "repo": "manifold",
+    "cloneUrl": "https://github.com/Rrr119/manifold.git"
+  },
+  "at": "2026-11-15T21:42:19.180Z"
+}

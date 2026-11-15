@@ -389,6 +389,12 @@ NB_MODULE(manifold3d, m) {
       .def("original_id", &Manifold::OriginalID, manifold__original_id)
       .def("simplify", &Manifold::Simplify, nb::arg("tolerance") = 0,
            manifold__simplify__tolerance)
+      .def("improve_quality", &Manifold::ImproveQuality,
+           nb::arg("tolerance") = 0,
+           "Remove short edges and degenerate triangles, and improve triangle "
+           "shape while preserving manifoldness and volume.")
+      .def("cleanup", &Manifold::Cleanup, nb::arg("tolerance") = 0,
+           "Alias for improve_quality().")
       .def("as_original", &Manifold::AsOriginal, nb::arg("id") = -1,
            manifold__as_original__id)
       .def("is_empty", &Manifold::IsEmpty, manifold__is_empty)

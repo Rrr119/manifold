@@ -388,6 +388,14 @@ Module.setup = function() {
     return this._Simplify(tolerance);
   };
 
+  Module.Manifold.prototype.improveQuality = function(tolerance = 0) {
+    return this._ImproveQuality(tolerance);
+  };
+
+  Module.Manifold.prototype.cleanup = function(tolerance = 0) {
+    return this._Cleanup(tolerance);
+  };
+
   class Mesh {
     constructor({
       numProp = 3,

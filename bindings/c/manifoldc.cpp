@@ -333,6 +333,18 @@ ManifoldManifold* manifold_simplify(const ManifoldManifold* m,
   return to_c(new Manifold(simplified));
 }
 
+ManifoldManifold* manifold_improve_quality(const ManifoldManifold* m,
+                                           double tolerance) {
+  auto improved = from_c(m)->ImproveQuality(tolerance);
+  return to_c(new Manifold(improved));
+}
+
+ManifoldManifold* manifold_cleanup(const ManifoldManifold* m,
+                                   double tolerance) {
+  auto cleaned = from_c(m)->Cleanup(tolerance);
+  return to_c(new Manifold(cleaned));
+}
+
 ManifoldManifold* manifold_empty() { return to_c(new Manifold()); }
 
 ManifoldManifold* manifold_copy(const ManifoldManifold* m) {

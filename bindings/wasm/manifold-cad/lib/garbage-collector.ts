@@ -53,6 +53,8 @@ const manifoldMemberFunctions = [
   'refineToTolerance',
   'setProperties',
   'simplify',
+  'improveQuality',
+  'cleanup',
   'asOriginal',
   'trimByPlane',
   'split',

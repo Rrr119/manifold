@@ -176,6 +176,10 @@ ManifoldManifold* manifold_refine_to_tolerance(const ManifoldManifold* m,
                                                double tolerance);
 ManifoldManifold* manifold_simplify(const ManifoldManifold* m,
                                     double tolerance);
+ManifoldManifold* manifold_improve_quality(const ManifoldManifold* m,
+                                           double tolerance);
+ManifoldManifold* manifold_cleanup(const ManifoldManifold* m,
+                                   double tolerance);
 
 // Manifold Shapes / Constructors
 

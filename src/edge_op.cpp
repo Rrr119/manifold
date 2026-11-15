@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cmath>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -35,6 +36,18 @@ bool Is01Longest(vec3 v0, vec3 v1, vec3 v2) {
   double l[3];
   for (int i : {0, 1, 2}) l[i] = la::dot(e[i], e[i]);
   return l[0] > l[1] && l[0] > l[2];
+}
+
+// Normalized triangle shape quality: 1 for equilateral, 0 for degenerate.
+// Unlike edge length this is scale invariant, so it is a useful objective for
+// local retriangulation.
+double TriQuality(vec3 a, vec3 b, vec3 c) {
+  const vec3 ab = b - a;
+  const vec3 ac = c - a;
+  const vec3 bc = c - b;
+  const double sum = length2(ab) + length2(ac) + length2(bc);
+  if (!(sum > 0) || !std::isfinite(sum)) return 0;
+  return 2 * std::sqrt(3.0) * la::length(la::cross(ab, ac)) / sum;
 }
 }  // namespace
 
@@ -128,6 +141,211 @@ void Manifold::Impl::RemoveDegenerates(int firstNewVert) {
 #endif
   // Merging verts causes their normals to change
   CalculateVertNormals();
+}
+
+/**
+ * Collapses edges no longer than tolerance, but only when the quadric error of
+ * the collapse is also within tolerance. This is deliberately narrower than
+ * Decimate(): it removes slivers and other locally tiny defects without
+ * simplifying well-shaped regions of the mesh.
+ */
+void Manifold::Impl::CollapseShortEdges(double tolerance) {
+  if (halfedge_.empty()) return;
+  halfedge_.MakeUnique();
+
+  CleanupTopology();
+
+  tolerance = std::max(tolerance, epsilon_);
+  if (!(tolerance > 0) || !std::isfinite(tolerance)) return;
+  if (faceNormal_.size() != NumTri()) SetFaceAndVertNormals();
+  const double maxCost = tolerance * tolerance;
+
+  Vec<int> scratch;
+  scratch.reserve(10);
+  Vec<double> totalCost(vertPos_.size(), 0);
+
+  // Each pass handles at most one collapse around a vertex. Repeating lets
+  // chains of short edges contract without having to maintain a priority queue
+  // while the halfedges are being rewritten.
+  for (int pass = 0; pass < 64; ++pass) {
+    Vec<int> edges;
+    for (int edge = 0; edge < static_cast<int>(halfedge_.size()); ++edge) {
+      if (!halfedge_.Valid(edge) || !halfedge_.IsForward(edge)) continue;
+      const double len2 = length2(vertPos_[halfedge_.End(edge)] -
+                                  vertPos_[halfedge_.Start(edge)]);
+      if (len2 <= maxCost) edges.push_back(edge);
+    }
+    if (edges.empty()) break;
+
+    Vec<Merger> merger(halfedge_.size(), {});
+    for (const int edge : edges) {
+      Merger edgeCost = CheckEdge(edge);
+      edgeCost.totalCost +=
+          std::max(totalCost[halfedge_.Start(edge)],
+                   totalCost[halfedge_.End(edge)]);
+      merger[edge] = edgeCost;
+    }
+    stable_sort(edges.begin(), edges.end(), [&](int a, int b) {
+      return merger[a].totalCost < merger[b].totalCost;
+    });
+
+    Vec<bool> vertsVisited(vertPos_.size(), false);
+    bool changed = false;
+    for (const int edge : edges) {
+      if (!halfedge_.Valid(edge)) continue;
+      if (merger[edge].totalCost > maxCost) break;
+
+      const int startV = halfedge_.Start(edge);
+      const int endV = halfedge_.End(edge);
+      const int opposite0 = halfedge_.End(NextHalfedge(edge));
+      const int opposite1 =
+          halfedge_.End(NextHalfedge(halfedge_.Pair(edge)));
+      if (vertsVisited[startV] || vertsVisited[endV] ||
+          vertsVisited[opposite0] || vertsVisited[opposite1])
+        continue;
+
+      if (!CollapseEdge(edge, scratch, merger[edge])) continue;
+
+      vertsVisited.resize(vertPos_.size(), true);
+      totalCost.resize(vertPos_.size(), 0);
+      totalCost[startV] += merger[edge].addedCost;
+      totalCost[endV] += merger[edge].addedCost;
+      vertsVisited[startV] = true;
+      vertsVisited[endV] = true;
+      changed = true;
+    }
+    if (!changed) break;
+
+    // CheckEdge uses face normals, so refresh the triangles touched by this
+    // pass before the next one.
+    for_each_n(autoPolicy(NumTri(), 1e4), countAt(0), NumTri(), [&](int tri) {
+      if (!halfedge_.Valid(3 * tri)) return;
+      bool update = false;
+      for (const int i : {0, 1, 2})
+        update |= vertsVisited[halfedge_.Start(3 * tri + i)];
+      if (!update) return;
+
+      const vec3 center = vertPos_[halfedge_.Start(3 * tri)];
+      faceNormal_[tri] = SafeNormalize(
+          la::cross(vertPos_[halfedge_.Start(3 * tri + 1)] - center,
+                    vertPos_[halfedge_.Start(3 * tri + 2)] - center));
+    });
+  }
+  CalculateVertNormals();
+}
+
+/**
+ * Flips the shared edge of two adjacent coplanar triangles when the flip
+ * increases their worst shape quality. A flip only changes which diagonal is
+ * used to triangulate the same quadrilateral, so the surface, volume and
+ * manifold topology are unchanged. Quads that are not coplanar within
+ * tolerance are left alone, as are flips that would create a duplicate edge.
+ */
+void Manifold::Impl::OptimizeTriangleQuality(double tolerance) {
+  if (halfedge_.empty()) return;
+  halfedge_.MakeUnique();
+  CleanupTopology();
+
+  tolerance = std::max(tolerance, epsilon_);
+  if (!(tolerance > 0) || !std::isfinite(tolerance)) return;
+  if (faceNormal_.size() != NumTri()) SetFaceAndVertNormals();
+
+  std::vector<int> queue(halfedge_.size());
+  std::iota(queue.begin(), queue.end(), 0);
+  std::vector<uint8_t> swapCount(halfedge_.size(), 0);
+
+  const size_t maxSwaps = 8 * NumEdge() + 64;
+  size_t numSwaps = 0;
+  while (!queue.empty() && numSwaps < maxSwaps) {
+    const int edge = queue.back();
+    queue.pop_back();
+    if (edge < 0 || edge >= static_cast<int>(halfedge_.size())) continue;
+    if (!halfedge_.Valid(edge) || !halfedge_.IsForward(edge)) continue;
+
+    const int pair = halfedge_.Pair(edge);
+    if (pair < 0) continue;
+    const uint8_t count = swapCount[std::min(edge, pair)];
+    if (count >= 255) continue;
+    if (meshRelation_.triRef.size() == NumTri() && !Continuous(edge))
+      continue;
+
+    const ivec3 tri0edge = TriOf(edge);
+    const ivec3 tri1edge = TriOf(pair);
+    const int tri0 = edge / 3;
+    const int tri1 = pair / 3;
+
+    // Stay on one planar patch. This is what makes the flip volume neutral.
+    const vec3 start = vertPos_[halfedge_.Start(tri0edge[0])];
+    const vec3 end = vertPos_[halfedge_.Start(tri0edge[1])];
+    const vec3 apex0 = vertPos_[halfedge_.Start(tri0edge[2])];
+    const vec3 apex1 = vertPos_[halfedge_.Start(tri1edge[2])];
+    const vec3 normal0 = faceNormal_[tri0];
+    const vec3 normal1 = faceNormal_[tri1];
+    if (length2(normal0) < 0.5 || length2(normal1) < 0.5) continue;
+    if (la::dot(normal0, normal1) <= 0) continue;
+    if (std::abs(la::dot(normal0, apex1 - start)) > tolerance ||
+        std::abs(la::dot(normal1, apex0 - start)) > tolerance)
+      continue;
+
+    // The diagonal must not already exist; SwapEdge would otherwise have to
+    // split the mesh to keep it manifold, changing topology.
+    bool diagonalExists = false;
+    ForVert(tri0edge[2], [&](int current) {
+      if (halfedge_.End(current) == halfedge_.Start(tri1edge[2]))
+        diagonalExists = true;
+    });
+    if (diagonalExists) continue;
+
+    const mat2x3 projection = GetAxisAlignedProjection(normal0);
+    const auto signedArea = [&](vec3 a, vec3 b, vec3 c) {
+      const vec2 ab = projection * (b - a);
+      const vec2 ac = projection * (c - a);
+      return la::cross(ab, ac);
+    };
+    const double orientation = signedArea(start, end, apex0);
+    if (orientation == 0) continue;
+
+    // Both candidate triangles must have the original winding and a positive
+    // area. This rejects non-convex quads, which cannot be flipped.
+    const double areaA = signedArea(apex1, end, apex0);
+    const double areaB = signedArea(apex0, start, apex1);
+    const double areaEps = epsilon_ * epsilon_;
+    if (orientation * areaA <= areaEps || orientation * areaB <= areaEps)
+      continue;
+
+    const double oldQuality =
+        std::min(TriQuality(start, end, apex0),
+                 TriQuality(end, start, apex1));
+    const double newQuality =
+        std::min(TriQuality(apex1, end, apex0),
+                 TriQuality(apex0, start, apex1));
+    if (!(newQuality > oldQuality + 1e-12)) continue;
+
+    // The signed volume of the tetrahedron formed by the old and new
+    // diagonals is the volume change of the local flip. Compute it from
+    // differences so large world coordinates do not lose all precision.
+    const double volumeDelta =
+        la::dot(apex1 - start, la::cross(end - start, apex0 - start)) / 6.0;
+    const double maxEdge =
+        std::max({length(end - start), length(apex0 - start),
+                  length(apex1 - start)});
+    if (std::abs(volumeDelta) > 16 * epsilon_ * maxEdge * maxEdge) continue;
+
+    ++swapCount[std::min(edge, pair)];
+    SwapEdge(edge, 0.5);
+    ++numSwaps;
+
+    for (const int current :
+         {tri0edge[0], tri0edge[1], tri0edge[2], tri1edge[0], tri1edge[1],
+          tri1edge[2], halfedge_.Pair(tri0edge[1]),
+          halfedge_.Pair(tri1edge[1])}) {
+      if (current >= 0 && current < static_cast<int>(halfedge_.size()))
+        queue.push_back(current);
+    }
+    swapCount.resize(halfedge_.size(), 0);
+  }
+
+  SetFaceAndVertNormals();
 }
 
 bool Manifold::Impl::Colinear(int edge) const {

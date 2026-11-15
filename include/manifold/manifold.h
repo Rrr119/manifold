@@ -220,7 +220,21 @@ class Manifold {
   Manifold Warp(std::function<void(vec3&)>) const;
   Manifold WarpBatch(std::function<void(VecView<vec3>)>) const;
   Manifold Simplify(double tolerance = 0) const;
+  /**
+   * Removes short edges and degenerate triangles, then improves triangle shape
+   * with coplanar edge flips. The result remains a valid 2-manifold and keeps
+   * the original volume: flips only retriangulate the same quadrilateral, and
+   * short-edge collapses are bounded by tolerance.
+   *
+   * @param tolerance Maximum length of edges considered short and maximum
+   *     allowed collapse error. Zero uses the manifold's current epsilon.
+   */
+  Manifold ImproveQuality(double tolerance = 0) const;
+  /// Alias for ImproveQuality().
+  Manifold Cleanup(double tolerance = 0) const;
   Manifold RemoveDegenerates() const;
+  /// Remove degenerates and collapse edges shorter than tolerance.
+  Manifold RemoveDegenerates(double tolerance) const;
   ///@}
 
   /** @name Boolean

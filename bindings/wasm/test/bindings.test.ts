@@ -80,6 +80,11 @@ suite('Manifold Bindings', () => {
     expect(manifold.volume()).toBeGreaterThan(0);
   });
 
+  test('ImproveQuality supports default argument', () => {
+    const manifold = manifoldModule.Manifold.sphere(1).improveQuality();
+    expect(manifold.volume()).toBeGreaterThan(0);
+  });
+
   test('rayCast returns hits through cube', () => {
     const cube = manifoldModule.Manifold.cube([1, 1, 1], true);
     const hits = cube.rayCast([0, 0, -5], [0, 0, 5]);

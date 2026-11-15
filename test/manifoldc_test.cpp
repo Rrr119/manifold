@@ -522,6 +522,25 @@ TEST(CBIND, simplify_smoke) {
   manifold_delete_manifold(simplified);
 }
 
+TEST(CBIND, improve_quality_smoke) {
+  ManifoldManifold* sphere = manifold_sphere(1.0, 100);
+  const double volume = manifold_volume(sphere);
+  const int numTri = manifold_num_tri(sphere);
+
+  ManifoldManifold* improved = manifold_improve_quality(sphere, 0.01);
+  EXPECT_EQ(manifold_status(improved), MANIFOLD_NO_ERROR);
+  EXPECT_LE(manifold_num_tri(improved), numTri);
+  EXPECT_NEAR(manifold_volume(improved), volume, 1e-5);
+
+  ManifoldManifold* cleaned = manifold_cleanup(sphere, 0.01);
+  EXPECT_EQ(manifold_status(cleaned), MANIFOLD_NO_ERROR);
+  EXPECT_LE(manifold_num_tri(cleaned), numTri);
+
+  manifold_delete_manifold(sphere);
+  manifold_delete_manifold(improved);
+  manifold_delete_manifold(cleaned);
+}
+
 TEST(CBIND, num_prop_vert) {
   ManifoldManifold* cube = manifold_cube(1.0, 1.0, 1.0, 0);
 

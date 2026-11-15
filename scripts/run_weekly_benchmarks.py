@@ -33,6 +33,7 @@ DEFAULT_GTEST_FILTER = ":".join(
         "Polygon.Sponge4",
         "Polygon.Zebra1",
         "Polygon.Zebra3",
+        "Quality.ImproveQualityBenchmark",
         "ExecutionContextFromMeshGL.CancelConcurrent",
     ]
 )

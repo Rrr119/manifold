@@ -1077,6 +1077,26 @@ export class Manifold {
   simplify(tolerance?: number): Manifold;
 
   /**
+   * Remove short edges and degenerate triangles, then improve the shape of the
+   * remaining triangles. Coplanar edge flips preserve the surface and volume;
+   * short edge collapses are bounded by the tolerance. The result remains a
+   * valid 2-manifold.
+   *
+   * @param tolerance Maximum length of edges to collapse and maximum local
+   *     surface movement. Defaults to the manifold's current tolerance.
+   * @group Transformations
+   */
+  improveQuality(tolerance?: number): Manifold;
+
+  /**
+   * Alias for improveQuality().
+   *
+   * @param tolerance Maximum edge length to collapse and local movement.
+   * @group Transformations
+   */
+  cleanup(tolerance?: number): Manifold;
+
+  /**
    * The genus is a topological property of the manifold, representing the
    * number of "handles". A sphere is 0, torus 1, etc. It is only meaningful for
    * a single mesh, so it is best to call Decompose() first.

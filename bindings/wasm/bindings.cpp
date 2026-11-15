@@ -195,6 +195,8 @@ EMSCRIPTEN_BINDINGS(whatever) {
       .function("numPropVert", &Manifold::NumPropVert)
       .function("_boundingBox", &Manifold::BoundingBox)
       .function("_Simplify", &Manifold::Simplify)
+      .function("_ImproveQuality", &Manifold::ImproveQuality)
+      .function("_Cleanup", &Manifold::Cleanup)
       .function("genus", &Manifold::Genus)
       .function("volume", &Manifold::Volume)
       .function("surfaceArea", &Manifold::SurfaceArea)

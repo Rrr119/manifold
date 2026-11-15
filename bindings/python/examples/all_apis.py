@@ -92,6 +92,8 @@ def all_manifold():
     n = m.num_vert()
     i = m.original_id()
     m = m.simplify(0.001)
+    m = m.improve_quality(0.001)
+    m = m.cleanup(0.001)
     c = m.project()
     m = m.refine(2)
     m = m.refine_to_length(0.1)

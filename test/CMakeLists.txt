@@ -25,6 +25,7 @@ set(
   utils_test.cpp
   polygon_test.cpp
   properties_test.cpp
+  quality_test.cpp
   manifold_test.cpp
   context_test.cpp
   measurement_test.cpp
